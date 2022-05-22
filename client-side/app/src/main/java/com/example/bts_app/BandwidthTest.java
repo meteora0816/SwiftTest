@@ -8,13 +8,25 @@ import android.net.NetworkInfo;
 import android.os.Build;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.util.Pair;
 
 import com.orhanobut.logger.Logger;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,6 +35,9 @@ import java.util.Locale;
 public class BandwidthTest {
 
     Context context;
+
+    final static private int InitTimeout = 8000;
+    final static private int PingTimeout = 8000;
 
     final static private int NewServerTime = 2000;              // Time interval for adding new servers
     final static private int TestTimeout = 5000;                // Maximum test duration
@@ -37,7 +52,9 @@ public class BandwidthTest {
     final static private double CheckerThreshold = 0.03;        // 3% threshold
     final static private int CheckerTimeoutWindow = 50;         // Window size when overtime
 
-    private final ArrayList<String> serverIP = new ArrayList<>(Arrays.asList("x.x.x.x", "x.x.x.x"));
+
+    final static private String masterIP = "127.0.0.1";
+
 
     static String networkType;
     boolean stop = false;
@@ -50,13 +67,92 @@ public class BandwidthTest {
         stop = true;
     }
 
-
-    static class PingThread extends Thread {
+    static class PingThread extends Thread implements Comparable<PingThread> {
         long rtt;
         String ip;
 
         PingThread(String ip) {
+            this.ip = ip;
+        }
 
+        public void run() {
+            try {
+                URL url = new URL("http://" + ip + "/testping.html");
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(PingTimeout);
+                connection.setReadTimeout(PingTimeout);
+                long nowTime = System.currentTimeMillis();
+                connection.connect();
+                connection.getResponseCode();
+                rtt = System.currentTimeMillis() - nowTime;
+                connection.disconnect();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public int compareTo(PingThread pingThread) {
+            return Long.compare(rtt, pingThread.rtt);
+        }
+    }
+
+    static class InitThread extends Thread {
+        String masterIp;
+        ArrayList<String> ipList;
+
+        InitThread(String ip) {
+            this.masterIp = ip;
+            this.ipList = new ArrayList<>();
+        }
+
+        ArrayList<String> getIpList() {
+            return ipList;
+        }
+
+        public void run() {
+            try {
+                URL url = new URL("http://" + masterIp + ":8080/speedtest/iplist/available");
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(InitTimeout);
+                connection.setReadTimeout(InitTimeout);
+                connection.connect();
+
+                if (connection.getResponseCode() == 200) {
+                    InputStream inputStream = connection.getInputStream();
+                    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+                    StringBuilder stringBuilder = new StringBuilder();
+                    String line;
+                    while ((line = bufferedReader.readLine()) != null)
+                        stringBuilder.append(line);
+
+                    JSONObject jsonObject = new JSONObject(stringBuilder.toString());
+
+                    int server_num = jsonObject.getInt("server_num");
+                    JSONArray jsonArray = jsonObject.getJSONArray("ip_list");
+                    ArrayList<String> ipList = new ArrayList<>();
+                    for (int i = 0; i < server_num; ++i)
+                        ipList.add(jsonArray.getString(i));
+                    connection.disconnect();
+
+                    ArrayList<PingThread> pingThreads = new ArrayList<>();
+                    for (String ip : ipList)
+                        pingThreads.add(new PingThread(ip));
+                    for (PingThread pingThread : pingThreads)
+                        pingThread.start();
+                    for (PingThread pingThread : pingThreads)
+                        pingThread.join();
+
+                    Collections.sort(pingThreads);
+
+                    for (PingThread pingThread : pingThreads)
+                        this.ipList.add(pingThread.ip);
+                }
+            } catch (IOException | JSONException | InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -181,6 +277,7 @@ public class BandwidthTest {
     }
 
     public double SpeedTest() throws InterruptedException {
+        stop = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 Log.d("No permission:", "ACCESS_FINE_LOCATION");
@@ -188,8 +285,13 @@ public class BandwidthTest {
             }
         }
 
-        stop = false;
         networkType = getNetworkType();
+
+        InitThread initThread = new InitThread(masterIP);
+        initThread.start();
+        initThread.join();
+
+        ArrayList<String> serverIP = initThread.getIpList();
 
         ArrayList<DownloadThread> downloadThread = new ArrayList<>();
         for (String ip : serverIP)
