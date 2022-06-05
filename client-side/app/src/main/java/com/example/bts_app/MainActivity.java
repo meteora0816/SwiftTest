@@ -33,7 +33,10 @@ public class MainActivity extends AppCompatActivity {
 
         Logger.addLogAdapter(new AndroidLogAdapter());
 
-        TextView textView = findViewById(R.id.text);
+        TextView bandwidth_text = findViewById(R.id.bandwidth);
+        TextView duration_text = findViewById(R.id.duration);
+        TextView traffic_text = findViewById(R.id.traffic);
+        TextView network_text = findViewById(R.id.network);
         Button button = findViewById(R.id.start);
         button.setOnClickListener(view -> {
             if (isTesting) {
@@ -43,21 +46,36 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 isTesting = true;
                 button.setText(R.string.stop);
-                textView.setText(R.string.testing);
+                bandwidth_text.setText(R.string.testing);
+                duration_text.setText(R.string.testing);
+                traffic_text.setText(R.string.testing);
+                network_text.setText(R.string.testing);
                 new Thread(() -> {
-                    double bandwidth = 0;
+                    String bandwidth = "0";
+                    String duration = "0";
+                    String traffic = "0";
+                    String network = "";
                     try {
-                        bandwidth = bandwidthTest.SpeedTest();
+                        bandwidthTest.SpeedTest();
+                        bandwidth = bandwidthTest.bandwidth_Mbps;
+                        duration = bandwidthTest.duration_s;
+                        traffic = bandwidthTest.traffic_MB;
+                        network = bandwidthTest.networkType;
                         bandwidthTest.stop();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    double finalBandwidth = bandwidth;
+                    String finalBandwidth = bandwidth + "  Mbps";
+                    String finalDuration = duration + "  s";
+                    String finalTraffic = traffic + "  MB";
+                    String finalNetwork = network;
                     runOnUiThread(() -> {
                         isTesting = false;
                         button.setText(R.string.start);
-                        String result = finalBandwidth + "Mbps";
-                        textView.setText(result);
+                        bandwidth_text.setText(finalBandwidth);
+                        duration_text.setText(finalDuration);
+                        traffic_text.setText(finalTraffic);
+                        network_text.setText(finalNetwork);
                     });
                 }).start();
             }

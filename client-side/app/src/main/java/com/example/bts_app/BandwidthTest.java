@@ -38,6 +38,7 @@ public class BandwidthTest {
 
     final static private int InitTimeout = 8000;
     final static private int PingTimeout = 8000;
+    final static private int ThreadNum = 4;
 
     final static private int NewServerTime = 2000;              // Time interval for adding new servers
     final static private int TestTimeout = 5000;                // Maximum test duration
@@ -55,8 +56,11 @@ public class BandwidthTest {
 
     final static private String masterIP = "127.0.0.1";
 
+    public String bandwidth_Mbps = "0";
+    public String duration_s = "0";
+    public String traffic_MB = "0";
+    public String networkType;
 
-    static String networkType;
     boolean stop = false;
 
     BandwidthTest(Context context) {
@@ -250,19 +254,41 @@ public class BandwidthTest {
         ArrayList<DownloadThread> downloadThread;
         int warmupNum;
         int sleepTime;
+        int threadNum;
+        int serverNum;
 
-        AddServerThread(ArrayList<DownloadThread> downloadThread, int sleepTime, String networkType) {
-            this.downloadThread = downloadThread;
+        AddServerThread(ArrayList<String> serverIP, int sleepTime, String networkType, int threadNum) {
+            this.downloadThread = new ArrayList<>();
+            for (String ip : serverIP)
+                for (int i = 0; i < threadNum; ++i)
+                    downloadThread.add(new DownloadThread(ip, 9876));
+
             this.sleepTime = sleepTime;
-            if (networkType.equals("WIFI") || networkType.equals("5G"))
-                this.warmupNum = 2;
-            else this.warmupNum = 1;
+            this.threadNum = threadNum;
+            this.serverNum = serverIP.size();
+
+            switch (networkType) {
+                case "5G":
+                    this.warmupNum = 4;
+                    break;
+                case "WiFi":
+                    this.warmupNum = 3;
+                    break;
+                case "4G":
+                    this.warmupNum = 2;
+                    break;
+                default:
+                    this.warmupNum = 1;
+                    break;
+            }
         }
 
         public void run() {
             int runningServerNum = 0;
-            for (DownloadThread t : downloadThread) {
-                t.start();
+            for (int i = 0; i < serverNum; ++i) {
+                for (int j = 0; j < threadNum; ++j)
+                    downloadThread.get(i * threadNum + j).start();
+
                 runningServerNum++;
                 if (runningServerNum < warmupNum)
                     continue;
@@ -276,27 +302,24 @@ public class BandwidthTest {
         }
     }
 
-    public double SpeedTest() throws InterruptedException {
+    public void SpeedTest() throws InterruptedException {
         stop = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 Log.d("No permission:", "ACCESS_FINE_LOCATION");
-                return 0;
+                return;
             }
         }
 
         networkType = getNetworkType();
 
-        InitThread initThread = new InitThread(masterIP);
-        initThread.start();
-        initThread.join();
-
-        ArrayList<String> serverIP = initThread.getIpList();
-
-        ArrayList<DownloadThread> downloadThread = new ArrayList<>();
-        for (String ip : serverIP)
-            downloadThread.add(new DownloadThread(ip, 9876));
-        AddServerThread requestThread = new AddServerThread(downloadThread, NewServerTime, networkType);
+//        InitThread initThread = new InitThread(masterIP);
+//        initThread.start();
+//        initThread.join();
+//
+//        ArrayList<String> serverIP = initThread.getIpList();
+        ArrayList<String> serverIP = new ArrayList<>(Arrays.asList("124.223.41.138", "124.223.35.212", "81.70.193.140", "49.232.129.114"));
+        AddServerThread requestThread = new AddServerThread(serverIP, NewServerTime, networkType, ThreadNum);
 
         ArrayList<Double> speedSample = new ArrayList<>();
         SimpleChecker checker = new SimpleChecker(speedSample);
@@ -316,7 +339,7 @@ public class BandwidthTest {
             }
 
             long downloadSize = 0;
-            for (DownloadThread t : downloadThread)
+            for (DownloadThread t : requestThread.downloadThread)
                 downloadSize += t.size;
             double downloadSizeMBits = (double) (downloadSize) / 1024 / 1024 * 8;
             long nowTime = System.currentTimeMillis();
@@ -346,20 +369,19 @@ public class BandwidthTest {
                 break;
             }
         }
-        for (DownloadThread t : downloadThread)
+        for (DownloadThread t : requestThread.downloadThread)
             t.socket.close();
         checker.interrupt();
         checker.join();
 
-        String bandwidth_Mbps = String.format(Locale.CHINA, "%.4f", checker.getSpeed());
-        String duration_s = String.format(Locale.CHINA, "%.2f", (double) (System.currentTimeMillis() - startTime) / 1000);
-        String traffic_MB = String.format(Locale.CHINA, "%.4f", sizeRecord.get(sizeRecord.size() - 1) / 8);
+        bandwidth_Mbps = String.format(Locale.CHINA, "%.2f", checker.getSpeed());
+        duration_s = String.format(Locale.CHINA, "%.2f", (double) (System.currentTimeMillis() - startTime) / 1000);
+        traffic_MB = String.format(Locale.CHINA, "%.2f", sizeRecord.get(sizeRecord.size() - 1) / 8);
 
         Log.d("bandwidth_Mbps", bandwidth_Mbps);
         Log.d("duration_s", duration_s);
         Log.d("traffic_MB", traffic_MB);
         Logger.d(speedSample);
-        return checker.getSpeed();
     }
 
     String getNetworkType() {
@@ -369,7 +391,7 @@ public class BandwidthTest {
             return "NONE";
         int connectionType = networkInfo.getType();
         if (connectionType == ConnectivityManager.TYPE_WIFI)
-            return "WIFI";
+            return "WiFi";
         if (connectionType == ConnectivityManager.TYPE_MOBILE) {
             int cellType = networkInfo.getSubtype();
             switch (cellType) {

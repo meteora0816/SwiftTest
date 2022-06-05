@@ -1764,6 +1764,8 @@ id auto
 id autoComplete
 id autoCompleteToEnd
 id autoCompleteToStart
+id bandwidth
+id bandwidth_layout
 id barrier
 id baseline
 id beginOnFirstDraw
@@ -1830,6 +1832,8 @@ id dragRight
 id dragStart
 id dragUp
 id dropdown_menu
+id duration
+id duration_layout
 id easeIn
 id easeInOut
 id easeOut
@@ -1945,6 +1949,8 @@ id mtrl_picker_title_text
 id mtrl_view_tag_bottom_padding
 id multiply
 id navigation_header_container
+id network
+id network_layout
 id never
 id noScroll
 id none
@@ -2074,6 +2080,8 @@ id toggle
 id top
 id topPanel
 id touch_outside
+id traffic
+id traffic_layout
 id transitionToEnd
 id transitionToStart
 id transition_current_scene

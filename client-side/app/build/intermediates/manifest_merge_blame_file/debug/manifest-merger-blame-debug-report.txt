@@ -41,26 +41,25 @@
 23-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:15:9-54
 24        android:supportsRtl="true"
 24-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:16:9-35
-25        android:testOnly="true"
-26        android:theme="@style/Theme.BTSAPP" >
-26-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:17:9-44
-27        <activity
-27-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:18:9-26:20
-28            android:name="com.example.bts_app.MainActivity"
-28-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:19:13-41
-29            android:exported="true" >
-29-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:20:13-36
-30            <intent-filter>
-30-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:21:13-25:29
-31                <action android:name="android.intent.action.MAIN" />
-31-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:22:17-69
-31-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:22:25-66
-32
-33                <category android:name="android.intent.category.LAUNCHER" />
-33-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:24:17-77
-33-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:24:27-74
-34            </intent-filter>
-35        </activity>
-36    </application>
-37
-38</manifest>
+25        android:theme="@style/Theme.BTSAPP" >
+25-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:17:9-44
+26        <activity
+26-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:18:9-26:20
+27            android:name="com.example.bts_app.MainActivity"
+27-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:19:13-41
+28            android:exported="true" >
+28-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:20:13-36
+29            <intent-filter>
+29-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:21:13-25:29
+30                <action android:name="android.intent.action.MAIN" />
+30-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:22:17-69
+30-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:22:25-66
+31
+32                <category android:name="android.intent.category.LAUNCHER" />
+32-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:24:17-77
+32-->C:\Users\BrightAE\Desktop\SwiftTest\client-side\app\src\main\AndroidManifest.xml:24:27-74
+33            </intent-filter>
+34        </activity>
+35    </application>
+36
+37</manifest>
