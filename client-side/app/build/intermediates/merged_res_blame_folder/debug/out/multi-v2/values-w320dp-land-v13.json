@@ -4,7 +4,7 @@
             "outputFile": "com.example.bts_app-mergeDebugResources-13:/values-w320dp-land-v13/values-w320dp-land-v13.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\BrightAE\\.gradle\\caches\\transforms-3\\12a85c3b0a371cac8f136f525cd7c57a\\transformed\\material-1.3.0\\res\\values-w320dp-land-v13\\values-w320dp-land-v13.xml",
+                    "source": "C:\\Users\\BrightAE\\.gradle\\caches\\transforms-3\\b3639cbe0951640ed2ce29bbc475de82\\transformed\\material-1.3.0\\res\\values-w320dp-land-v13\\values-w320dp-land-v13.xml",
                     "from": {
                         "startLines": "2,3,4",
                         "startColumns": "4,4,4",

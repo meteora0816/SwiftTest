@@ -269,7 +269,7 @@ public class BandwidthTest {
 
             switch (networkType) {
                 case "5G":
-                    this.warmupNum = 4;
+                    this.warmupNum = 8;
                     break;
                 case "WiFi":
                     this.warmupNum = 3;
@@ -318,7 +318,8 @@ public class BandwidthTest {
 //        initThread.join();
 //
 //        ArrayList<String> serverIP = initThread.getIpList();
-        ArrayList<String> serverIP = new ArrayList<>(Arrays.asList("124.223.41.138", "124.223.35.212", "81.70.193.140", "49.232.129.114"));
+        ArrayList<String> serverIP = new ArrayList<>(Arrays.asList("124.223.41.138", "124.223.35.212", "81.70.193.140", "49.232.129.114",
+                "81.70.55.189", "62.234.117.45", "110.42.169.86", "121.5.26.137"));
         AddServerThread requestThread = new AddServerThread(serverIP, NewServerTime, networkType, ThreadNum);
 
         ArrayList<Double> speedSample = new ArrayList<>();
