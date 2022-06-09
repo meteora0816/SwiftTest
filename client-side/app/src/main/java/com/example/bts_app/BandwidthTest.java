@@ -36,12 +36,13 @@ public class BandwidthTest {
 
     Context context;
 
-    final static private int InitTimeout = 8000;
-    final static private int PingTimeout = 8000;
-    final static private int ThreadNum = 4;
+    final static private int InitTimeout = 2000;
+    final static private int PingTimeout = 2000;
 
-    final static private int NewServerTime = 2000;              // Time interval for adding new servers
-    final static private int TestTimeout = 5000;                // Maximum test duration
+    final static private int ThreadNum = 4;
+    final static private int ServerCapability = 100;            // 100Mbps per server
+
+    final static private int TestTimeout = 2000;                // Maximum test duration
     final static private int MaxTrafficUse = 200;               // Maximum traffic limit
 
     final static private int SamplingInterval = 10;             // Time interval for Sampling
@@ -54,7 +55,7 @@ public class BandwidthTest {
     final static private int CheckerTimeoutWindow = 50;         // Window size when overtime
 
 
-    final static private String masterIP = "127.0.0.1";
+    final static private String MasterIP = "118.31.164.30";
 
     public String bandwidth_Mbps = "0";
     public String duration_s = "0";
@@ -92,6 +93,7 @@ public class BandwidthTest {
                 rtt = System.currentTimeMillis() - nowTime;
                 connection.disconnect();
             } catch (IOException e) {
+                rtt = 2000;
                 e.printStackTrace();
             }
         }
@@ -103,21 +105,15 @@ public class BandwidthTest {
     }
 
     static class InitThread extends Thread {
-        String masterIp;
-        ArrayList<String> ipList;
+        public ArrayList<String> ipList;
 
-        InitThread(String ip) {
-            this.masterIp = ip;
+        InitThread() {
             this.ipList = new ArrayList<>();
-        }
-
-        ArrayList<String> getIpList() {
-            return ipList;
         }
 
         public void run() {
             try {
-                URL url = new URL("http://" + masterIp + ":8080/speedtest/iplist/available");
+                URL url = new URL("http://" + MasterIP + ":8080/speedtest/iplist/available");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(InitTimeout);
@@ -250,32 +246,30 @@ public class BandwidthTest {
         }
     }
 
-    static class AddServerThread extends Thread {
+    static class DownloadThreadMonitor {
         ArrayList<DownloadThread> downloadThread;
         int warmupNum;
-        int sleepTime;
-        int threadNum;
         int serverNum;
+        int runningServerNum;
 
-        AddServerThread(ArrayList<String> serverIP, int sleepTime, String networkType, int threadNum) {
+        DownloadThreadMonitor(ArrayList<String> serverIP, String networkType) {
             this.downloadThread = new ArrayList<>();
             for (String ip : serverIP)
-                for (int i = 0; i < threadNum; ++i)
+                for (int i = 0; i < ThreadNum; ++i)
                     downloadThread.add(new DownloadThread(ip, 9876));
 
-            this.sleepTime = sleepTime;
-            this.threadNum = threadNum;
             this.serverNum = serverIP.size();
+            this.runningServerNum = 0;
 
             switch (networkType) {
                 case "5G":
-                    this.warmupNum = 8;
-                    break;
-                case "WiFi":
                     this.warmupNum = 3;
                     break;
-                case "4G":
+                case "WiFi":
                     this.warmupNum = 2;
+                    break;
+                case "4G":
+                    this.warmupNum = 1;
                     break;
                 default:
                     this.warmupNum = 1;
@@ -283,22 +277,31 @@ public class BandwidthTest {
             }
         }
 
-        public void run() {
-            int runningServerNum = 0;
-            for (int i = 0; i < serverNum; ++i) {
-                for (int j = 0; j < threadNum; ++j)
-                    downloadThread.get(i * threadNum + j).start();
-
+        void start() {
+            for (int i = 0; i < warmupNum; ++i) {
+                if (runningServerNum >= serverNum)
+                    return;
+                for (int j = 0; j < ThreadNum; ++j)
+                    downloadThread.get(i * ThreadNum + j).start();
                 runningServerNum++;
-                if (runningServerNum < warmupNum)
-                    continue;
-
-                try {
-                    sleep(sleepTime);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
             }
+        }
+
+        public void add() {
+            if (runningServerNum >= serverNum)
+                return;
+            for (int j = 0; j < ThreadNum; ++j)
+                downloadThread.get(runningServerNum * ThreadNum + j).start();
+            runningServerNum++;
+        }
+
+        public void stop() {
+            for (DownloadThread thread : downloadThread)
+                thread.socket.close();
+        }
+
+        public int capability() {
+            return runningServerNum * ServerCapability;
         }
     }
 
@@ -313,20 +316,17 @@ public class BandwidthTest {
 
         networkType = getNetworkType();
 
-//        InitThread initThread = new InitThread(masterIP);
-//        initThread.start();
-//        initThread.join();
-//
-//        ArrayList<String> serverIP = initThread.getIpList();
-        ArrayList<String> serverIP = new ArrayList<>(Arrays.asList("124.223.41.138", "124.223.35.212", "81.70.193.140", "49.232.129.114",
-                "81.70.55.189", "62.234.117.45", "110.42.169.86", "121.5.26.137"));
-        AddServerThread requestThread = new AddServerThread(serverIP, NewServerTime, networkType, ThreadNum);
+        InitThread initThread = new InitThread();
+        initThread.start();
+        initThread.join();
+
+        DownloadThreadMonitor downloadThreadMonitor = new DownloadThreadMonitor(initThread.ipList, networkType);
 
         ArrayList<Double> speedSample = new ArrayList<>();
         SimpleChecker checker = new SimpleChecker(speedSample);
 
         long startTime = System.currentTimeMillis();
-        requestThread.start();
+        downloadThreadMonitor.start();
         checker.start();
 
         ArrayList<Double> sizeRecord = new ArrayList<>();
@@ -340,18 +340,24 @@ public class BandwidthTest {
             }
 
             long downloadSize = 0;
-            for (DownloadThread t : requestThread.downloadThread)
+            for (DownloadThread t : downloadThreadMonitor.downloadThread)
                 downloadSize += t.size;
             double downloadSizeMBits = (double) (downloadSize) / 1024 / 1024 * 8;
             long nowTime = System.currentTimeMillis();
 
             while (posRecord + 1 < timeRecord.size() && nowTime - timeRecord.get(posRecord + 1) >= SamplingWindow)
                 posRecord++;
+
+            double speed = 0;
             if (posRecord >= 0)
-                speedSample.add((downloadSizeMBits - sizeRecord.get(posRecord)) * 1000.0 / (nowTime - timeRecord.get(posRecord)));
+                speed = (downloadSizeMBits - sizeRecord.get(posRecord)) * 1000.0 / (nowTime - timeRecord.get(posRecord));
+                speedSample.add(speed);
 
             sizeRecord.add(downloadSizeMBits);
             timeRecord.add(nowTime);
+
+            if (speed > downloadThreadMonitor.capability())
+                downloadThreadMonitor.add();
 
             if (checker.finish) {
                 Log.d("Bandwidth Test", "Test succeed.");
@@ -370,8 +376,7 @@ public class BandwidthTest {
                 break;
             }
         }
-        for (DownloadThread t : requestThread.downloadThread)
-            t.socket.close();
+        downloadThreadMonitor.stop();
         checker.interrupt();
         checker.join();
 
