@@ -36,8 +36,8 @@ public class BandwidthTest {
 
     Context context;
 
-    final static private int InitTimeout = 2000;
-    final static private int PingTimeout = 2000;
+    final static private int InitTimeout = 500;
+    final static private int PingTimeout = 500;
 
     final static private int ThreadNum = 4;
     final static private int ServerCapability = 100;            // 100Mbps per server
