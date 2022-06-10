@@ -183,6 +183,9 @@ public class BandwidthTest {
                     for (int i = 0; i < windowNum; ++i) {
                         int j = i + CheckerSelectedSize - 1;
                         double lower = recentSamples.get(i), upper = recentSamples.get(j);
+                        // Here no division by 0 is considered,
+                        // but (NaN < CheckerThreshold) so it's work!
+                        // All 0 should not go through this condition.
                         if ((upper - lower) / upper < CheckerThreshold) {
                             double res = 0;
                             for (int k = i; k <= j; ++k)
@@ -221,6 +224,7 @@ public class BandwidthTest {
                 this.port = port;
                 this.stopped = false;
                 this.socket = new DatagramSocket();
+                socket.setSoTimeout(TestTimeout);
             } catch (IOException e) {
                 e.printStackTrace();
             }
