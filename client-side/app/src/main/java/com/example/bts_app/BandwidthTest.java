@@ -211,6 +211,7 @@ public class BandwidthTest {
     static class DownloadThread extends Thread {
         DatagramSocket socket;
         InetAddress address;
+        boolean stopped;
         int port;
         int size;
 
@@ -218,6 +219,7 @@ public class BandwidthTest {
             try {
                 this.address = InetAddress.getByName(ip);
                 this.port = port;
+                this.stopped = false;
                 this.socket = new DatagramSocket();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -228,6 +230,8 @@ public class BandwidthTest {
         public void run() {
             byte[] send_data = "1".getBytes();
             DatagramPacket send_packet = new DatagramPacket(send_data, send_data.length, address, port);
+            byte[] stop_data = "stop".getBytes();
+            DatagramPacket stop_packet = new DatagramPacket(stop_data, stop_data.length, address, port);
             try {
                 socket.send(send_packet);
 
@@ -235,22 +239,17 @@ public class BandwidthTest {
                 byte[] receive_buf = new byte[BUFFER_SIZE * 2];
                 DatagramPacket receive_packet = new DatagramPacket(receive_buf, receive_buf.length);
 
-                while (true) {
+                while (!stopped) {
                     socket.receive(receive_packet);
                     String receive_data = new String(receive_packet.getData(), 0, receive_packet.getLength());
                     size += receive_data.length();
                 }
+
+                socket.send(stop_packet);
+                socket.close();
+
             } catch (IOException e) {
-//                Log.d("UDP Test", "socket closed.");
-            }
-            finally {
-                byte[] stop_data = "stop".getBytes();
-                DatagramPacket stop_packet = new DatagramPacket(stop_data, stop_data.length, address, port);
-                try {
-                    socket.send(stop_packet);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+//                e.printStackTrace();
             }
         }
     }
@@ -295,7 +294,7 @@ public class BandwidthTest {
                     return;
                 for (int j = 0; j < ThreadNum; ++j)
                     downloadThread.get(i * ThreadNum + j).start();
-//                Log.d("Server added:", serverIP.get(runningServerNum));
+                Log.d("Server added:", serverIP.get(runningServerNum));
                 runningServerNum++;
             }
         }
@@ -305,13 +304,15 @@ public class BandwidthTest {
                 return;
             for (int j = 0; j < ThreadNum; ++j)
                 downloadThread.get(runningServerNum * ThreadNum + j).start();
-//            Log.d("Server added:", serverIP.get(runningServerNum));
+            Log.d("Server added:", serverIP.get(runningServerNum));
             runningServerNum++;
         }
 
-        public void stop() {
+        public void stop() throws InterruptedException {
             for (DownloadThread thread : downloadThread)
-                thread.socket.close();
+                thread.stopped = true;
+            for (DownloadThread thread : downloadThread)
+                thread.join();
         }
 
         public int capability() {
