@@ -243,16 +243,28 @@ public class BandwidthTest {
             } catch (IOException e) {
 //                Log.d("UDP Test", "socket closed.");
             }
+            finally {
+                byte[] stop_data = "stop".getBytes();
+                DatagramPacket stop_packet = new DatagramPacket(stop_data, stop_data.length, address, port);
+                try {
+                    socket.send(stop_packet);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
     static class DownloadThreadMonitor {
         ArrayList<DownloadThread> downloadThread;
+        ArrayList<String> serverIP;
         int warmupNum;
         int serverNum;
         int runningServerNum;
 
+
         DownloadThreadMonitor(ArrayList<String> serverIP, String networkType) {
+            this.serverIP = serverIP;
             this.downloadThread = new ArrayList<>();
             for (String ip : serverIP)
                 for (int i = 0; i < ThreadNum; ++i)
@@ -283,6 +295,7 @@ public class BandwidthTest {
                     return;
                 for (int j = 0; j < ThreadNum; ++j)
                     downloadThread.get(i * ThreadNum + j).start();
+//                Log.d("Server added:", serverIP.get(runningServerNum));
                 runningServerNum++;
             }
         }
@@ -292,6 +305,7 @@ public class BandwidthTest {
                 return;
             for (int j = 0; j < ThreadNum; ++j)
                 downloadThread.get(runningServerNum * ThreadNum + j).start();
+//            Log.d("Server added:", serverIP.get(runningServerNum));
             runningServerNum++;
         }
 
