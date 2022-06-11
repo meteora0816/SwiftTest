@@ -39,11 +39,7 @@ public class MainActivity extends AppCompatActivity {
         TextView network_text = findViewById(R.id.network);
         Button button = findViewById(R.id.start);
         button.setOnClickListener(view -> {
-            if (isTesting) {
-                isTesting = false;
-                button.setText(R.string.start);
-                bandwidthTest.stop();
-            } else {
+            if (!isTesting) {
                 isTesting = true;
                 button.setText(R.string.stop);
                 bandwidth_text.setText(R.string.testing);
@@ -61,7 +57,6 @@ public class MainActivity extends AppCompatActivity {
                         duration = bandwidthTest.duration_s;
                         traffic = bandwidthTest.traffic_MB;
                         network = bandwidthTest.networkType;
-                        bandwidthTest.stop();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }

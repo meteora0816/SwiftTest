@@ -30,302 +30,97 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Locale;
 
 public class BandwidthTest {
 
     Context context;
 
-    final static private int InitTimeout = 500;
-    final static private int PingTimeout = 500;
+    final static private int ConnectTimeout = 8000;                    // connect timeout
+    final static private int TestTimeout = 10000;               // fixed test duration
+    final static private int SamplingWindow = 100;               // Sampling overlap
 
-    final static private int ThreadNum = 4;
-    final static private int ServerCapability = 100;            // 100Mbps per server
-
-    final static private int TestTimeout = 2000;                // Maximum test duration
-    final static private int MaxTrafficUse = 200;               // Maximum traffic limit
-
-    final static private int SamplingInterval = 10;             // Time interval for Sampling
-    final static private int SamplingWindow = 50;               // Sampling overlap
-
-    final static private int CheckerSleep = 50;                 // Time interval between checks
-    final static private int CheckerWindowSize = 10;            // SimpleChecker window size
-    final static private int CheckerSelectedSize = 8;           // SimplerChecker selected size
-    final static private double CheckerThreshold = 0.03;        // 3% threshold
-    final static private int CheckerTimeoutWindow = 50;         // Window size when overtime
-
-
-    final static private String MasterIP = "118.31.164.30";
 
     public String bandwidth_Mbps = "0";
     public String duration_s = "0";
     public String traffic_MB = "0";
     public String networkType;
 
-    boolean stop = false;
-
     BandwidthTest(Context context) {
         this.context = context;
     }
 
-    public void stop() {
-        stop = true;
-    }
+    static class DownloadThread extends Thread {
+        URL url;
+        long size; // byte
 
-    static class PingThread extends Thread implements Comparable<PingThread> {
-        long rtt;
-        String ip;
-
-        PingThread(String ip) {
-            this.ip = ip;
+        DownloadThread(String url) {
+            try {
+                this.url = new URL(url);
+            } catch (MalformedURLException e) {
+//                e.printStackTrace();
+            }
         }
 
         public void run() {
             try {
-                URL url = new URL("http://" + ip + "/testping.html");
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(PingTimeout);
-                connection.setReadTimeout(PingTimeout);
-                long nowTime = System.currentTimeMillis();
-                connection.connect();
-                connection.getResponseCode();
-                rtt = System.currentTimeMillis() - nowTime;
-                connection.disconnect();
-            } catch (IOException e) {
-                rtt = 2000;
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public int compareTo(PingThread pingThread) {
-            return Long.compare(rtt, pingThread.rtt);
-        }
-    }
-
-    static class InitThread extends Thread {
-        public ArrayList<String> ipList;
-
-        InitThread() {
-            this.ipList = new ArrayList<>();
-        }
-
-        public void run() {
-            try {
-                URL url = new URL("http://" + MasterIP + ":8080/speedtest/iplist/available");
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(InitTimeout);
-                connection.setReadTimeout(InitTimeout);
-                connection.connect();
-
-                if (connection.getResponseCode() == 200) {
-                    InputStream inputStream = connection.getInputStream();
-                    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-                    StringBuilder stringBuilder = new StringBuilder();
-                    String line;
-                    while ((line = bufferedReader.readLine()) != null)
-                        stringBuilder.append(line);
-
-                    JSONObject jsonObject = new JSONObject(stringBuilder.toString());
-
-                    int server_num = jsonObject.getInt("server_num");
-                    JSONArray jsonArray = jsonObject.getJSONArray("ip_list");
-                    ArrayList<String> ipList = new ArrayList<>();
-                    for (int i = 0; i < server_num; ++i)
-                        ipList.add(jsonArray.getString(i));
-                    connection.disconnect();
-
-                    ArrayList<PingThread> pingThreads = new ArrayList<>();
-                    for (String ip : ipList)
-                        pingThreads.add(new PingThread(ip));
-                    for (PingThread pingThread : pingThreads)
-                        pingThread.start();
-                    for (PingThread pingThread : pingThreads)
-                        pingThread.join();
-
-                    Collections.sort(pingThreads);
-
-                    for (PingThread pingThread : pingThreads)
-                        this.ipList.add(pingThread.ip);
-                }
-            } catch (IOException | JSONException | InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    static class SimpleChecker extends Thread {
-        ArrayList<Double> speedSample;
-        boolean finish;
-        Double simpleSpeed;
-
-        SimpleChecker(ArrayList<Double> speedSample) {
-            this.speedSample = speedSample;
-            this.finish = false;
-            this.simpleSpeed = 0.0;
-        }
-
-        public void run() {
-            while (!finish) {
-                try {
-                    sleep(CheckerSleep);
-
-                    int n = speedSample.size();
-                    if (n < CheckerWindowSize) continue;
-
-                    ArrayList<Double> recentSamples = new ArrayList<>();
-                    for (int i = n - CheckerWindowSize; i < n; ++i)
-                        recentSamples.add(speedSample.get(i));
-                    Collections.sort(recentSamples);
-                    int windowNum = CheckerWindowSize - CheckerSelectedSize + 1;
-                    for (int i = 0; i < windowNum; ++i) {
-                        int j = i + CheckerSelectedSize - 1;
-                        double lower = recentSamples.get(i), upper = recentSamples.get(j);
-                        // Here no division by 0 is considered,
-                        // but (NaN < CheckerThreshold) so it's work!
-                        // All 0 should not go through this condition.
-                        if ((upper - lower) / upper < CheckerThreshold) {
-                            double res = 0;
-                            for (int k = i; k <= j; ++k)
-                                res += recentSamples.get(k);
-                            simpleSpeed = res / CheckerSelectedSize;
-                            finish = true;
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(ConnectTimeout);
+                conn.setReadTimeout(ConnectTimeout);
+                if (conn.getResponseCode() == 200) {
+                    InputStream inStream = conn.getInputStream();
+                    byte[] buffer = new byte[10240]; // download 10k every loop
+                    long byteRead = 0;
+                    while ((byteRead = inStream.read(buffer)) != -1) {
+                        size += byteRead;
+                        if (Thread.interrupted()) {
+                            inStream.close();
+                            conn.disconnect();
                             break;
                         }
                     }
-                } catch (InterruptedException e) {
-                    double res = 0.0;
-                    int n = speedSample.size();
-                    for (int k = n - CheckerTimeoutWindow; k < n; ++k)
-                        res += speedSample.get(k);
-                    simpleSpeed = res / CheckerTimeoutWindow;
-                    break;
                 }
-            }
-        }
-
-        public double getSpeed() {
-            return simpleSpeed;
-        }
-    }
-
-    static class DownloadThread extends Thread {
-        DatagramSocket socket;
-        InetAddress address;
-        boolean stopped;
-        int port;
-        int size;
-
-        DownloadThread(String ip, int port) {
-            try {
-                this.address = InetAddress.getByName(ip);
-                this.port = port;
-                this.stopped = false;
-                this.socket = new DatagramSocket();
-                socket.setSoTimeout(TestTimeout);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        @SuppressWarnings("InfiniteLoopStatement")
-        public void run() {
-            byte[] send_data = "1".getBytes();
-            DatagramPacket send_packet = new DatagramPacket(send_data, send_data.length, address, port);
-            byte[] stop_data = "stop".getBytes();
-            DatagramPacket stop_packet = new DatagramPacket(stop_data, stop_data.length, address, port);
-            try {
-                socket.send(send_packet);
-
-                int BUFFER_SIZE = 1024;
-                byte[] receive_buf = new byte[BUFFER_SIZE * 2];
-                DatagramPacket receive_packet = new DatagramPacket(receive_buf, receive_buf.length);
-
-                while (!stopped) {
-                    socket.receive(receive_packet);
-                    String receive_data = new String(receive_packet.getData(), 0, receive_packet.getLength());
-                    size += receive_data.length();
-                }
-
-                socket.send(stop_packet);
-                socket.close();
-
-            } catch (IOException e) {
+            } catch (Exception e) {
 //                e.printStackTrace();
             }
         }
     }
 
-    static class DownloadThreadMonitor {
-        ArrayList<DownloadThread> downloadThread;
-        ArrayList<String> serverIP;
-        int warmupNum;
-        int serverNum;
-        int runningServerNum;
-
-
-        DownloadThreadMonitor(ArrayList<String> serverIP, String networkType) {
-            this.serverIP = serverIP;
-            this.downloadThread = new ArrayList<>();
-            for (String ip : serverIP)
-                for (int i = 0; i < ThreadNum; ++i)
-                    downloadThread.add(new DownloadThread(ip, 9876));
-
-            this.serverNum = serverIP.size();
-            this.runningServerNum = 0;
-
-            switch (networkType) {
-                case "5G":
-                    this.warmupNum = 3;
-                    break;
-                case "WiFi":
-                    this.warmupNum = 2;
-                    break;
-                case "4G":
-                    this.warmupNum = 1;
-                    break;
-                default:
-                    this.warmupNum = 1;
-                    break;
+    private Double calcSpeed(ArrayList<Double> speedSamples) {
+        double avg = 0;
+        for (double sample : speedSamples) {
+            avg += sample;
+        }
+        avg /= 20;
+        ArrayList<Double> interval = new ArrayList<>();
+        double sum = 0;
+        int num = 0;
+        for (double sample : speedSamples) {
+            sum += sample;
+            num ++;
+            if (sum>=avg) {
+                interval.add(sum/num);
+                sum = 0;
+                num = 0;
             }
         }
-
-        void start() {
-            for (int i = 0; i < warmupNum; ++i) {
-                if (runningServerNum >= serverNum)
-                    return;
-                for (int j = 0; j < ThreadNum; ++j)
-                    downloadThread.get(i * ThreadNum + j).start();
-                Log.d("Server added:", serverIP.get(runningServerNum));
-                runningServerNum++;
-            }
+        interval.add(sum/num);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            interval.sort(Comparator.naturalOrder());
         }
-
-        public void add() {
-            if (runningServerNum >= serverNum)
-                return;
-            for (int j = 0; j < ThreadNum; ++j)
-                downloadThread.get(runningServerNum * ThreadNum + j).start();
-            Log.d("Server added:", serverIP.get(runningServerNum));
-            runningServerNum++;
+        avg = 0;
+        int tot = 0;
+        for (double sample : speedSamples.subList(5,18)) {
+            avg += sample;
+            tot ++;
         }
-
-        public void stop() throws InterruptedException {
-            for (DownloadThread thread : downloadThread)
-                thread.stopped = true;
-            for (DownloadThread thread : downloadThread)
-                thread.join();
-        }
-
-        public int capability() {
-            return runningServerNum * ServerCapability;
-        }
+        avg /= tot;
+        return avg;
     }
 
     public void SpeedTest() throws InterruptedException {
-        stop = false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 Log.d("No permission:", "ACCESS_FINE_LOCATION");
@@ -335,72 +130,54 @@ public class BandwidthTest {
 
         networkType = getNetworkType();
 
-        InitThread initThread = new InitThread();
-        initThread.start();
-        initThread.join();
+        ArrayList<String> ipList = new ArrayList<>();
+        ipList.add("49.233.50.165");
+        ipList.add("49.232.129.114");
+        ipList.add("1.116.117.183");
+        ipList.add("1.15.30.244");
 
-        DownloadThreadMonitor downloadThreadMonitor = new DownloadThreadMonitor(initThread.ipList, networkType);
+        ArrayList<DownloadThread> downloadThread = new ArrayList<>();
+        for (String ip : ipList) {
+            downloadThread.add(new DownloadThread("http://" + ip + "/datafile?" + Math.floor(Math.random() * 100000)));
+        }
+
+        for (DownloadThread t : downloadThread) {
+            t.start();
+        }
 
         ArrayList<Double> speedSample = new ArrayList<>();
-        SimpleChecker checker = new SimpleChecker(speedSample);
 
         long startTime = System.currentTimeMillis();
-        downloadThreadMonitor.start();
-        checker.start();
 
         ArrayList<Double> sizeRecord = new ArrayList<>();
         ArrayList<Long> timeRecord = new ArrayList<>();
         int posRecord = -1;
         while (true) {
-            try {
-                Thread.sleep(SamplingInterval);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            Thread.sleep(SamplingWindow);
 
             long downloadSize = 0;
-            for (DownloadThread t : downloadThreadMonitor.downloadThread)
+            for (DownloadThread t : downloadThread)
                 downloadSize += t.size;
             double downloadSizeMBits = (double) (downloadSize) / 1024 / 1024 * 8;
             long nowTime = System.currentTimeMillis();
 
-            while (posRecord + 1 < timeRecord.size() && nowTime - timeRecord.get(posRecord + 1) >= SamplingWindow)
-                posRecord++;
-
-            double speed = 0;
-            if (posRecord >= 0)
-                speed = (downloadSizeMBits - sizeRecord.get(posRecord)) * 1000.0 / (nowTime - timeRecord.get(posRecord));
-                speedSample.add(speed);
-
             sizeRecord.add(downloadSizeMBits);
             timeRecord.add(nowTime);
 
-            if (speed > downloadThreadMonitor.capability())
-                downloadThreadMonitor.add();
+            if (timeRecord.size() >= 2) {
+                speedSample.add((downloadSizeMBits - sizeRecord.get(posRecord)) * 1000.0 / (nowTime - timeRecord.get(posRecord)));
+            }
+            posRecord++;
 
-            if (checker.finish) {
+            if (nowTime - startTime >= TestTimeout) {
                 Log.d("Bandwidth Test", "Test succeed.");
                 break;
             }
-            if (nowTime - startTime >= TestTimeout) {
-                Log.d("Bandwidth Test", "Exceeding the time limit.");
-                break;
-            }
-            if (downloadSizeMBits / 8 >= MaxTrafficUse) {
-                Log.d("Bandwidth Test", "Exceeding the traffic limit.");
-                break;
-            }
-            if (stop) {
-                Log.d("Bandwidth Test", "Testing Stopped.");
-                break;
-            }
         }
-        downloadThreadMonitor.stop();
-        checker.interrupt();
-        checker.join();
 
-        bandwidth_Mbps = String.format(Locale.CHINA, "%.2f", checker.getSpeed());
-        duration_s = String.format(Locale.CHINA, "%.2f", (double) (System.currentTimeMillis() - startTime) / 1000);
+
+        bandwidth_Mbps = String.format(Locale.CHINA, "%.2f", calcSpeed(speedSample));
+        duration_s = String.format(Locale.CHINA, "%.1f", (double) (System.currentTimeMillis() - startTime) / 1000);
         traffic_MB = String.format(Locale.CHINA, "%.2f", sizeRecord.get(sizeRecord.size() - 1) / 8);
 
         Log.d("bandwidth_Mbps", bandwidth_Mbps);
