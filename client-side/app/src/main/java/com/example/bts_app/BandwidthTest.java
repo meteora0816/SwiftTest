@@ -45,7 +45,6 @@ public class BandwidthTest {
     public String bandwidth_Mbps = "0";
     public String duration_s = "0";
     public String traffic_MB = "0";
-    public String networkType;
 
     BandwidthTest(Context context) {
         this.context = context;
@@ -128,7 +127,6 @@ public class BandwidthTest {
             }
         }
 
-        networkType = getNetworkType();
 
         ArrayList<String> ipList = new ArrayList<>();
         ipList.add("49.233.50.165");
